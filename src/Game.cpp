@@ -32,7 +32,7 @@ void Hooked_Process() {
 }
 // AND_TouchEvent(int,int,int,int): se reenvia sin modificar. Significado de los args: ver Menu::OnTouchRaw.
 void Hooked_Touch(int a, int b, int c, int d) {
-    if (g_touchCb) g_touchCb(a, b, c, d);
+    if (g_touchCb && g_touchCb(a, b, c, d)) return;  // el menu ARCX lo consumio
     if (g_origTouch) g_origTouch(a, b, c, d);
 }
 // NVEventEGLSwapBuffers(): hilo de render con el contexto GL del juego activo.

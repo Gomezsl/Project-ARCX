@@ -42,7 +42,7 @@ EGLBoolean Hooked_eglSwapBuffers(EGLDisplay d, EGLSurface s) {
 
 void GameTick() { SkinManager::Get().OnGameTick(); }
 
-void OnTouchRaw(int a, int b, int c, int d) { Menu::OnTouchRaw(a, b, c, d); }
+bool OnTouchRaw(int a, int b, int c, int d) { return Menu::OnTouchRaw(a, b, c, d); }
 
 ModuleInfo FindModule(const char* soName) {
     struct Ctx { const char* name; ModuleInfo mi; } ctx{soName, {}};

@@ -1,5 +1,6 @@
 #include "ImGuiMenu.h"
 #include <algorithm>
+#include <atomic>
 #include <mutex>
 #include <vector>
 #include "Log.h"
@@ -14,21 +15,32 @@ std::vector<TouchEv> g_events;
 bool g_init = false;
 bool g_open = false;
 int g_page = 0;
+// Rectangulos (px) del ultimo frame, para decidir en el hilo del juego si un toque es del menu.
+std::atomic<int> g_btn[4], g_win[4];  // x0,y0,x1,y1
+std::atomic<bool> g_captured{false};
+bool In(const std::atomic<int>* r, int x, int y) {
+    return x >= r[0] && x <= r[2] && y >= r[1] && y <= r[3];
+}
 }  // namespace
 
 namespace Menu {
 
-void OnTouchRaw(int a, int b, int c, int d) {
-    // AND_TouchEvent(int,int,int,int). El prototipo (4 enteros) esta verificado en el simbolo; el SIGNIFICADO
-    // de cada argumento NO. Se registran los primeros eventos en arcx.log para confirmarlo.
-    // Hipotesis de trabajo: a=accion (1=down, 2=move, 3=up), b=dedo, c=x, d=y.
+bool OnTouchRaw(int a, int b, int c, int d) {
+    // Mapeo VERIFICADO con arcx.log de un Samsung A14: a=2 DOWN, a=3 MOVE, a=1 UP; b=dedo; c=x, d=y (pixeles).
     static int logged = 0;
-    if (logged < 40) { ++logged; Log::Info("Touch raw: a=%d b=%d c=%d d=%d", a, b, c, d); }
-    if (b != 0) return;
-    int act = (a == 1) ? 0 : (a == 2) ? 1 : (a == 3) ? 2 : -1;
-    if (act < 0) return;
-    std::lock_guard<std::mutex> lk(g_mx);
-    if (g_events.size() < 64) g_events.push_back({act, (float)c, (float)d});
+    if (logged < 8) { ++logged; Log::Info("Touch raw: a=%d b=%d c=%d d=%d", a, b, c, d); }
+    int act = (a == 2) ? 0 : (a == 3) ? 1 : (a == 1) ? 2 : -1;
+    if (act < 0) return false;
+    bool inside = In(g_btn, c, d) || In(g_win, c, d);
+    bool consume;
+    if (act == 0) { if (inside) g_captured = true; consume = inside; }
+    else if (act == 2) { consume = g_captured.exchange(false); }
+    else consume = g_captured;
+    if (b == 0) {
+        std::lock_guard<std::mutex> lk(g_mx);
+        if (g_events.size() < 64) g_events.push_back({act, (float)c, (float)d});
+    }
+    return consume;
 }
 
 static void Init() {
@@ -69,7 +81,12 @@ void Render(int w, int h) {
     ImGui::SetNextWindowPos(ImVec2(10, 10));
     ImGui::Begin("##arcx_btn", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_AlwaysAutoResize);
     if (ImGui::Button("ARCX")) g_open = !g_open;
+    {
+        ImVec2 p = ImGui::GetWindowPos(), z = ImGui::GetWindowSize();
+        g_btn[0] = (int)p.x; g_btn[1] = (int)p.y; g_btn[2] = (int)(p.x + z.x); g_btn[3] = (int)(p.y + z.y);
+    }
     ImGui::End();
+    if (!g_open) { for (auto& v : g_win) v = -1; }
 
     if (g_open) {
         ImGui::SetNextWindowSize(ImVec2(w * 0.55f, h * 0.85f), ImGuiCond_Always);
@@ -119,6 +136,10 @@ void Render(int w, int h) {
                 ImGui::EndTabItem();
             }
             ImGui::EndTabBar();
+        }
+        {
+            ImVec2 p = ImGui::GetWindowPos(), z = ImGui::GetWindowSize();
+            g_win[0] = (int)p.x; g_win[1] = (int)p.y; g_win[2] = (int)(p.x + z.x); g_win[3] = (int)(p.y + z.y);
         }
         ImGui::End();
     }

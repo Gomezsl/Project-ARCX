@@ -17,7 +17,7 @@ const GameApi& Api();
 void HookFunctions();             // instala hook de tick/toque si las direcciones estan resueltas
 bool IsTickHooked();
 void SetTickCallback(void (*cb)());
-using TouchFn = void (*)(int a, int b, int c, int d);
+using TouchFn = bool (*)(int a, int b, int c, int d);  // true = evento consumido (no llega al juego)
 void SetTouchCallback(TouchFn cb);
 using SwapFn = void (*)();
 void SetSwapCallback(SwapFn cb);  // se llama en cada swap del juego, hilo de render, contexto GL activo
