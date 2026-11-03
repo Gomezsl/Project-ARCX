@@ -63,7 +63,7 @@ ModuleInfo FindModule(const char* soName) {
 }
 }  // namespace
 
-extern "C" void OnModLoad() {
+extern "C" __attribute__((visibility("default"))) void OnModLoad() {
     namespace fs = std::filesystem;
     std::string dataDir = Paths::DetectGameDataDir();
     std::string arcxDir = dataDir.empty() ? "/sdcard/" : dataDir + "arcx/";

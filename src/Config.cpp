@@ -57,10 +57,11 @@ namespace Paths {
 std::string DetectGameDataDir() {
     // Candidatos; el primero que exista gana. Se puede forzar con modloader_path en el .ini.
     static const char* kCandidates[] = {
-        "/storage/emulated/0/Android/data/com.rockstargames.gtasa/",
-        "/sdcard/Android/data/com.rockstargames.gtasa/",
+        // Android_unprotected primero: es donde AML y los demas mods de este setup guardan sus datos.
         "/storage/emulated/0/Android_unprotected/data/com.rockstargames.gtasa/",
         "/sdcard/Android_unprotected/data/com.rockstargames.gtasa/",
+        "/storage/emulated/0/Android/data/com.rockstargames.gtasa/",
+        "/sdcard/Android/data/com.rockstargames.gtasa/",
     };
     for (const char* c : kCandidates) {
         std::error_code ec;
