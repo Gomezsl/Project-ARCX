@@ -18,21 +18,27 @@ bool g_tickHooked = false;
 void (*g_tickCb)() = nullptr;
 Game::TouchFn g_touchCb = nullptr;
 void (*g_origProcess)() = nullptr;
-int (*g_origTouch)(int, int, int, int, int) = nullptr;
+void (*g_origTouch)(int, int, int, int) = nullptr;
+void (*g_origSwap)() = nullptr;
+Game::SwapFn g_swapCb = nullptr;
+bool g_swapHooked = false;
 
 // Estado del reemplazo
-void* g_origRwObject = nullptr;  // clump original del model info (para RemoveSkin)
-bool g_haveOrig = false;
 bool g_skinInstalled = false;
 
 void Hooked_Process() {
     if (g_origProcess) g_origProcess();
     if (g_tickCb) g_tickCb();
 }
-// Paso transparente: se reenvian 5 enteros en registros; la interpretacion es TODO (ver README).
-int Hooked_Touch(int a, int b, int c, int d, int e) {
+// AND_TouchEvent(int,int,int,int): se reenvia sin modificar. Significado de los args: ver Menu::OnTouchRaw.
+void Hooked_Touch(int a, int b, int c, int d) {
     if (g_touchCb) g_touchCb(a, b, c, d);
-    return g_origTouch ? g_origTouch(a, b, c, d, e) : 0;
+    if (g_origTouch) g_origTouch(a, b, c, d);
+}
+// NVEventEGLSwapBuffers(): hilo de render con el contexto GL del juego activo.
+void Hooked_Swap() {
+    if (g_swapCb) g_swapCb();
+    if (g_origSwap) g_origSwap();
 }
 
 void* ModelInfoForPlayer() {
@@ -66,6 +72,8 @@ bool IsGameReady() {
 
 void SetTickCallback(void (*cb)()) { g_tickCb = cb; }
 void SetTouchCallback(TouchFn cb) { g_touchCb = cb; }
+void SetSwapCallback(SwapFn cb) { g_swapCb = cb; }
+bool IsSwapHooked() { return g_swapHooked; }
 bool IsTickHooked() { return g_tickHooked; }
 
 void HookFunctions() {
@@ -75,6 +83,12 @@ void HookFunctions() {
         if (!g_tickHooked) Log::Error("Failed to hook per-frame tick");
     } else {
         Log::Error("Game function unavailable: per-frame tick; skins se aplicaran desde el hilo de render (inseguro)");
+    }
+    if (g_targets.swapBuffers) {
+        g_swapHooked = g_hook(g_targets.swapBuffers, (void*)&Hooked_Swap, (void**)&g_origSwap);
+        if (!g_swapHooked) Log::Error("Failed to hook NVEventEGLSwapBuffers");
+    } else {
+        Log::Error("Game function unavailable: NVEventEGLSwapBuffers");
     }
     if (g_targets.touchEvent) {
         if (!g_hook(g_targets.touchEvent, (void*)&Hooked_Touch, (void**)&g_origTouch))
@@ -100,31 +114,18 @@ bool ApplySkin(LoadedSkin& skin) {
     void* mi = ModelInfoForPlayer();
     if (!ped || !mi) { Log::Error("Invalid pointer: ped=%p modelInfo=%p", ped, mi); return false; }
 
-    if (!g_haveOrig) {
-        g_origRwObject = g_api.ModelInfo_GetRwObject(mi);
-        g_haveOrig = true;
-    }
     g_api.Entity_DeleteRwObject(ped);                    // 1) quitar la instancia actual del ped
-    if (g_skinInstalled) g_api.ModelInfo_DeleteRwObject(mi);  // 2) destruir el clump de la skin anterior (lo posee el juego)
-    g_api.ClumpModelInfo_SetClump(mi, skin.clump);       // 3) registrar el nuevo clump en el model info
-    skin.clumpOwnedByGame = true;                        //    el juego es ahora responsable de destruirlo
+    g_api.ClumpModelInfo_SetClump(mi, skin.clump);       // 2) registrar el nuevo clump en el model info
+    skin.clumpOwnedByGame = true;                        //    desde aqui ARCX NUNCA lo destruye
     g_skinInstalled = true;
-    g_api.Ped_SetModelIndex(ped, kPlayerModelId);        // 4) recrear la instancia del ped desde el model info
+    g_api.Ped_SetModelIndex(ped, kPlayerModelId);        // 3) recrear la instancia del ped desde el model info
     return true;
 }
 
 bool RemoveSkin() {
-    if (!g_skinInstalled) return true;
-    if (!IsGameReady() || !g_haveOrig || !g_origRwObject) { Log::Error("Cannot restore original model"); return false; }
-    void* ped = g_api.FindPlayerPed(-1);
-    void* mi = ModelInfoForPlayer();
-    if (!ped || !mi) return false;
-    g_api.Entity_DeleteRwObject(ped);
-    g_api.ModelInfo_DeleteRwObject(mi);
-    // LIMITACION: si el juego destruyo/recargo el clump original entre medias, este puntero queda colgante.
-    g_api.ClumpModelInfo_SetClump(mi, reinterpret_cast<RpClump*>(g_origRwObject));
-    g_api.Ped_SetModelIndex(ped, kPlayerModelId);
-    g_skinInstalled = false;
-    return true;
+    // TODO: GTA SA 2.10 ARM64 -- no hay simbolo para CBaseModelInfo::GetRwObject/DeleteRwObject, asi que no se
+    // puede guardar/restaurar el clump original sin conocer el layout de CBaseModelInfo (m_pRwObject).
+    Log::Error("RemoveSkin unavailable: original clump cannot be restored yet (TODO: GTA SA 2.10 ARM64)");
+    return false;
 }
 }  // namespace Game

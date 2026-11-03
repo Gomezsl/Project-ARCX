@@ -19,6 +19,9 @@ bool IsTickHooked();
 void SetTickCallback(void (*cb)());
 using TouchFn = void (*)(int a, int b, int c, int d);
 void SetTouchCallback(TouchFn cb);
+using SwapFn = void (*)();
+void SetSwapCallback(SwapFn cb);  // se llama en cada swap del juego, hilo de render, contexto GL activo
+bool IsSwapHooked();
 
 bool ApplySkin(LoadedSkin& skin); // sustituye el clump del modelo del jugador. Solo hilo del juego.
 bool RemoveSkin();

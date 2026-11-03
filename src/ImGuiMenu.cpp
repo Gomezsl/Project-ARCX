@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <mutex>
 #include <vector>
+#include "Log.h"
 #include "SkinManager.h"
 #include "imgui.h"
 #include "imgui_impl_opengl3.h"
@@ -18,8 +19,11 @@ int g_page = 0;
 namespace Menu {
 
 void OnTouchRaw(int a, int b, int c, int d) {
-    // TODO: GTA SA 2.10 ARM64 -- mapeo (a,b,c,d) -> (accion,x,y) sin verificar.
-    // Hipotesis a comprobar en Ghidra: a=tipo(1 down,2 move,3 up), b=dedo, c=x, d=y.
+    // AND_TouchEvent(int,int,int,int). El prototipo (4 enteros) esta verificado en el simbolo; el SIGNIFICADO
+    // de cada argumento NO. Se registran los primeros eventos en arcx.log para confirmarlo.
+    // Hipotesis de trabajo: a=accion (1=down, 2=move, 3=up), b=dedo, c=x, d=y.
+    static int logged = 0;
+    if (logged < 40) { ++logged; Log::Info("Touch raw: a=%d b=%d c=%d d=%d", a, b, c, d); }
     if (b != 0) return;
     int act = (a == 1) ? 0 : (a == 2) ? 1 : (a == 3) ? 2 : -1;
     if (act < 0) return;
@@ -36,7 +40,7 @@ static void Init() {
     ImGuiStyle& st = ImGui::GetStyle();
     st.WindowRounding = 12; st.FrameRounding = 8; st.TabRounding = 8; st.GrabRounding = 8;
     st.ItemSpacing = ImVec2(10, 12);
-    ImGui_ImplOpenGL3_Init("#version 300 es");
+    ImGui_ImplOpenGL3_Init("#version 100");  // el juego enlaza libGLESv2 (contexto GLES2)
     g_init = true;
 }
 

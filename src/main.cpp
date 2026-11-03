@@ -23,7 +23,7 @@ MYMOD(com.arcx.skinloader, Project ARCX, 0.1.0, ARCX)
 namespace {
 EGLBoolean (*g_origSwap)(EGLDisplay, EGLSurface) = nullptr;
 
-EGLBoolean Hooked_eglSwapBuffers(EGLDisplay d, EGLSurface s) {
+void RenderOverlay(EGLDisplay d, EGLSurface s) {
     EGLint w = 0, h = 0;
     eglQuerySurface(d, s, EGL_WIDTH, &w);
     eglQuerySurface(d, s, EGL_HEIGHT, &h);
@@ -31,12 +31,17 @@ EGLBoolean Hooked_eglSwapBuffers(EGLDisplay d, EGLSurface s) {
         if (!Game::IsTickHooked()) SkinManager::Get().OnGameTick();  // ultimo recurso (hilo de render, inseguro)
         Menu::Render(w, h);
     }
+}
+// Via principal: swap del propio juego (NVEventEGLSwapBuffers), contexto GL del juego ya activo.
+void OnGameSwap() { RenderOverlay(eglGetCurrentDisplay(), eglGetCurrentSurface(EGL_DRAW)); }
+// Respaldo: swap generico de libEGL.
+EGLBoolean Hooked_eglSwapBuffers(EGLDisplay d, EGLSurface s) {
+    RenderOverlay(d, s);
     return g_origSwap(d, s);
 }
 
 void GameTick() { SkinManager::Get().OnGameTick(); }
 
-// TODO: GTA SA 2.10 ARM64 -- interpretar (a,b,c,d) del callback de toque una vez verificado su prototipo.
 void OnTouchRaw(int a, int b, int c, int d) { Menu::OnTouchRaw(a, b, c, d); }
 
 ModuleInfo FindModule(const char* soName) {
@@ -76,10 +81,17 @@ extern "C" void OnModLoad() {
     Game::Initialize(mod, [handle](const char* n) { return Aml::GetSym(handle, n); }, Aml::Hook);
     Game::SetTickCallback(GameTick);
     Game::SetTouchCallback(OnTouchRaw);
+    Game::SetSwapCallback(OnGameSwap);
     Game::HookFunctions();
 
-    void* egl = dlopen("libEGL.so", RTLD_NOW);
-    void* swap = egl ? dlsym(egl, "eglSwapBuffers") : nullptr;
-    if (!Aml::Hook(swap, (void*)&Hooked_eglSwapBuffers, (void**)&g_origSwap))
-        Log::Error("Failed to hook eglSwapBuffers: el menu ImGui no se dibujara");
+    if (!Game::IsSwapHooked()) {
+        void* egl = dlopen("libEGL.so", RTLD_NOW);
+        void* swap = egl ? dlsym(egl, "eglSwapBuffers") : nullptr;
+        if (!Aml::Hook(swap, (void*)&Hooked_eglSwapBuffers, (void**)&g_origSwap))
+            Log::Error("Failed to hook eglSwapBuffers: el menu ImGui no se dibujara");
+        else
+            Log::Info("Menu hook: eglSwapBuffers (respaldo)");
+    } else {
+        Log::Info("Menu hook: NVEventEGLSwapBuffers");
+    }
 }
