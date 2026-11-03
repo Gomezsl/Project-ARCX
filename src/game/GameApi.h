@@ -63,22 +63,20 @@ struct RwApi {
 struct GameApi {
     void* (*FindPlayerPed)(int playerId) = nullptr;                    // FindPlayerPed(-1)
     void** modelInfoPtrs = nullptr;                                    // CModelInfo::ms_modelInfoPtrs (dato)
-    void* (*ModelInfo_GetRwObject)(void* modelInfo) = nullptr;         // CBaseModelInfo::GetRwObject
-    void (*ModelInfo_DeleteRwObject)(void* modelInfo) = nullptr;       // CBaseModelInfo::DeleteRwObject
     void (*ClumpModelInfo_SetClump)(void* modelInfo, RpClump*) = nullptr;  // CPedModelInfo::SetClump
     void (*Entity_DeleteRwObject)(void* entity) = nullptr;             // CPed::DeleteRwObject
     void (*Ped_SetModelIndex)(void* ped, uint32_t modelId) = nullptr;  // CPed::SetModelIndex
 
     bool CanApplySkin() const {
-        return FindPlayerPed && modelInfoPtrs && ModelInfo_GetRwObject && ModelInfo_DeleteRwObject &&
-               ClumpModelInfo_SetClump && Entity_DeleteRwObject && Ped_SetModelIndex;
+        return FindPlayerPed && modelInfoPtrs && ClumpModelInfo_SetClump && Entity_DeleteRwObject && Ped_SetModelIndex;
     }
 };
 
 // Funciones usadas solo para hooks.
 struct HookTargets {
     void* gameProcess = nullptr;  // funcion llamada una vez por frame en el hilo del juego (void(*)())
-    void* touchEvent = nullptr;   // callback de toque del juego (ver README, seccion Input)
+    void* touchEvent = nullptr;   // AND_TouchEvent(int,int,int,int)
+    void* swapBuffers = nullptr;  // NVEventEGLSwapBuffers(): hilo de render, contexto GL activo
 };
 
 struct ModuleInfo {
