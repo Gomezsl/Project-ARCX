@@ -5,7 +5,6 @@
 #include <filesystem>
 #include <string>
 #include <mod/amlmod.h>
-#include <mod/config.h>   // define la clase Config que usa la macro MYMODCFG
 #include "AmlCompat.h"
 #include "Config.h"
 #include "Game.h"
@@ -13,7 +12,13 @@
 #include "Log.h"
 #include "SkinManager.h"
 
-MYMODCFG(com.arcx.skinloader, Project ARCX, 0.1.0, ARCX)
+// MYMODCFG enlaza AML::Config (implementada en mod/config.cpp, que no forma parte de la libreria):
+// da "undefined symbol: Config::Config(char const*)". MYMOD no la necesita.
+#ifdef MYMOD
+MYMOD(com.arcx.skinloader, Project ARCX, 0.1.0, ARCX)
+#else
+#error "Tu revision de AML no define MYMOD: revisa third_party/AndroidModLoader/mod/amlmod.h"
+#endif
 
 namespace {
 EGLBoolean (*g_origSwap)(EGLDisplay, EGLSurface) = nullptr;
