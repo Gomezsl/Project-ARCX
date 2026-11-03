@@ -40,10 +40,11 @@ jobs:
       - name: Collect libs/arm64-v8a/libARCX.so
         run: |
           mkdir -p libs/arm64-v8a
-          cp build/libARCX.so libs/arm64-v8a/libARCX.so
-          file libs/arm64-v8a/libARCX.so
+          cp build/libARCX64.so libs/arm64-v8a/libARCX64.so
+          file libs/arm64-v8a/libARCX64.so
+          nm -D --defined-only libs/arm64-v8a/libARCX64.so | grep -E "OnModLoad|__GetModInfo" || echo "AVISO: faltan simbolos AML exportados"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: libARCX-arm64-v8a
-          path: libs/arm64-v8a/libARCX.so
+          name: libARCX64-arm64-v8a
+          path: libs/arm64-v8a/libARCX64.so
