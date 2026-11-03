@@ -29,3 +29,9 @@ Riesgos conocidos (comprobar en pruebas):
 ## 4. Tick por frame y entrada táctil
 * `GameProcess`: función llamada una vez por frame en el hilo del juego (prototipo asumido `void()`). Sin ella, ARCX aplica desde el hilo de render (inseguro) y lo registra.
 * `TouchEvent`: el hook reenvía 5 enteros sin modificar; **interpretación pendiente** en `Menu::OnTouchRaw`. Verifica prototipo y coordenadas (¿pantalla o vista?) antes de fiarte.
+
+## 5. Resultado del análisis de `libGTASA.so` 2.10 (aarch64)
+* El binario **no está strippeado** y exporta unos 21 000 símbolos dinámicos: `llvm-nm -D` sirve; no hacen falta offsets.
+* RenderWare está compilado como **C++**: los nombres son mangled, p. ej. `_Z12RwStreamOpen12RwStreamType18RwStreamAccessTypePKv`.
+* El juego solo importa `eglGetDisplay/eglGetProcAddress/eglQueryString` y enlaza `libGLESv2.so` → contexto **GLES2**.
+* Pendiente (requiere desensamblar): semántica de `CPedModelInfo::SetClump` (¿incrementa refs del TXD? ¿asume jerarquía/animaciones?), propiedad del clump al hacer streaming, layout de `CBaseModelInfo` para restaurar el clump original, y el significado de los 4 enteros de `AND_TouchEvent`.
