@@ -1,6 +1,6 @@
 # Project ARCX — Skin Selector / Loader para GTA SA Android (AML, ARM64)
 
-Plugin nativo `libARCX.so` (arm64-v8a) para **Android Mod Loader (AML)** con menú **Dear ImGui**.
+Plugin nativo `libARCX64.so` (arm64-v8a) para **Android Mod Loader (AML)** con menú **Dear ImGui**.
 
 ## Estado real del proyecto (léelo primero)
 
@@ -49,8 +49,10 @@ AmlCompat  → única capa que toca la API de AML
 
 ## Instalación
 
-1. Compila con GitHub Actions (push → artefacto `libARCX-arm64-v8a` → `libs/arm64-v8a/libARCX.so`) o localmente (abajo).
-2. Copia `libARCX.so` a la carpeta de mods de AML (`.../AML/mods/` según tu instalación de AML).
+1. Compila con GitHub Actions (push → artefacto `libARCX64-arm64-v8a` → `libs/arm64-v8a/libARCX64.so`) o localmente (abajo).
+2. Copia `libARCX64.so` a la carpeta `mods/` de AML, junto a tus otros mods:
+   `Android_unprotected/data/com.rockstargames.gtasa/mods/libARCX64.so`.
+   **El nombre debe terminar en `64.so`** (como `libCheatMenu64.so`). Si ARCX no aparece en la lista "List of loaded mods" del crash log de AML, no se cargó.
 3. Skins (la ruta se autodetecta; se puede forzar con `modloader_path` en `arcx_config.ini`):
 
 ```
@@ -75,7 +77,7 @@ Archivos generados en `.../com.rockstargames.gtasa/arcx/`: `arcx.log`, `arcx_con
 bash scripts/fetch_deps.sh
 cmake -S . -B build -G Ninja -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK/build/cmake/android.toolchain.cmake \
       -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-24 -DCMAKE_BUILD_TYPE=Release
-cmake --build build   # → build/libARCX.so
+cmake --build build   # → build/libARCX64.so
 ```
 
 ## AML: puntos a verificar contra tu revisión
