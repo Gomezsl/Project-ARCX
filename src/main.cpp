@@ -5,6 +5,7 @@
 #include <filesystem>
 #include <string>
 #include <mod/amlmod.h>
+#include <mod/config.h>   // define la clase Config que usa la macro MYMODCFG
 #include "AmlCompat.h"
 #include "Config.h"
 #include "Game.h"
