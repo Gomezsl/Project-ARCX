@@ -10,12 +10,13 @@ Plugin nativo `libARCX.so` (arm64-v8a) para **Android Mod Loader (AML)** con men
 | Config (`arcx_config.ini`), log (`arcx.log`), paginación, menú ImGui | ✅ Implementado (menú no probado en dispositivo) |
 | Carga DFF/TXD vía RenderWare (`SkinLoader`) | ⚠️ Código escrito, **inactivo hasta resolver las funciones RW** de 2.10 ARM64 |
 | Aplicar el modelo al jugador (`Game::ApplySkin`) | ⚠️ Código escrito (estrategia en `docs/REVERSING.md`), **inactivo hasta resolver funciones del juego** |
-| Offsets/símbolos GTA SA 2.10 ARM64 | ❌ **Todos en 0 (TODO)**. No se han inventado. |
-| Entrada táctil para el menú | ❌ Hook de toque sin verificar (símbolo/prototipo desconocidos) |
+| Símbolos GTA SA 2.10 ARM64 | ✅ Verificados con `nm -D` sobre `libGTASA.so` 2.10 (SHA-256 en `gta_sa_2_10_arm64.cpp`): RenderWare, `FindPlayerPed`, `CPed::SetModelIndex`, `CPedModelInfo::SetClump`, `CGame::Process`, `AND_TouchEvent`, `NVEventEGLSwapBuffers`. Offsets de respaldo solo si el tamaño del módulo coincide. |
+| Quitar skin / restaurar el modelo original | ❌ No hay símbolo para `CBaseModelInfo::GetRwObject`; `RemoveSkin` devuelve error (TODO) |
+| Entrada táctil para el menú | ⚠️ `AND_TouchEvent(int,int,int,int)` hookeado (prototipo verificado); el significado de los 4 argumentos está sin verificar: los primeros eventos se registran en `arcx.log` (`Touch raw: ...`) |
+| Dibujo del menú | ⚠️ Se engancha `NVEventEGLSwapBuffers` (el juego usa GLES2 → ImGui con backend ES2, `#version 100`) |
 | Compilación en CI / ejecución en dispositivo | ⚠️ **No he podido compilarlo con el NDK ni probarlo en Android.** Solo se comprobó sintaxis de los módulos portables en host. Espera ajustar errores en el primer build. |
 
-Mientras falten las direcciones, el plugin arranca, escanea, muestra el menú y registra en `arcx.log`
-`Game function unavailable: <función> (TODO: GTA SA 2.10 ARM64)`; **no cambia ninguna skin** (no hay falsos positivos).
+El plugin registra en `arcx.log` cada función resuelta (`Resolved ... via symbol`) o faltante (`Game function unavailable`). Aplicar una skin sigue **sin estar probado en dispositivo**: el reemplazo del clump del modelo del jugador es una estrategia no verificada (ver `docs/REVERSING.md`).
 
 ## A) Parte fácil vs B) Parte crítica
 

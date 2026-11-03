@@ -38,7 +38,7 @@ target_include_directories(ARCX PRIVATE
   src ${IMGUI} ${IMGUI}/backends ${TP}/stb
   ${AML} ${AML}/include   # amlmod.h se incluye como <mod/amlmod.h>; verifica el layout de tu revision de AML
 )
-target_compile_definitions(ARCX PRIVATE IMGUI_IMPL_OPENGL_ES3 IMGUI_DISABLE_DEMO_WINDOWS)
+target_compile_definitions(ARCX PRIVATE IMGUI_IMPL_OPENGL_ES2 IMGUI_DISABLE_DEMO_WINDOWS)
 target_compile_options(ARCX PRIVATE -Wall -Wextra -Wno-unused-parameter -fno-rtti)
-target_link_libraries(ARCX PRIVATE log android EGL GLESv3 dl)
+target_link_libraries(ARCX PRIVATE log android EGL GLESv2 dl)
 target_link_options(ARCX PRIVATE -Wl,--gc-sections -Wl,--exclude-libs,ALL)
