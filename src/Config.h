@@ -1,7 +1,7 @@
 #pragma once
 #include <string>
 
-struct Config {
+struct ArcxConfig {
     bool rememberSkin = true;
     bool applyOnStart = true;
     std::string lastSkin;       // nombre de carpeta de la ultima skin aplicada

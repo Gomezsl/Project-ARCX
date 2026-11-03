@@ -105,7 +105,7 @@ void Render(int w, int h) {
                 ImGui::EndTabItem();
             }
             if (ImGui::BeginTabItem("AJUSTES")) {
-                Config& c = sm.Cfg();
+                ArcxConfig& c = sm.Cfg();
                 bool changed = false;
                 changed |= ImGui::Checkbox("Recordar skin", &c.rememberSkin);
                 changed |= ImGui::Checkbox("Aplicar al iniciar", &c.applyOnStart);

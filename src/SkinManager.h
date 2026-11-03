@@ -25,14 +25,14 @@ public:
     void RequestApply();
     void RequestRemove();
     void OnGameTick();  // hilo del juego (o render como ultimo recurso)
-    Config& Cfg() { return m_cfg; }
+    ArcxConfig& Cfg() { return m_cfg; }
     void SaveConfig();
 
 private:
     std::string ModloaderDir() const;
 
     std::mutex m_mx;
-    Config m_cfg;
+    ArcxConfig m_cfg;
     std::string m_cfgPath, m_defaultRoot;
     std::vector<SkinInfo> m_skins;
     int m_selected = -1, m_active = -1;

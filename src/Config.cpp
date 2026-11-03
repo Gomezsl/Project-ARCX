@@ -14,7 +14,7 @@ static std::string Trim(const std::string& s) {
 }
 static bool ToBool(const std::string& v) { return v == "1" || v == "true" || v == "on"; }
 
-bool Config::Load(const std::string& path) {
+bool ArcxConfig::Load(const std::string& path) {
     std::ifstream in(path);
     if (!in) return false;
     std::string line;
@@ -34,7 +34,7 @@ bool Config::Load(const std::string& path) {
     return true;
 }
 
-bool Config::Save(const std::string& path) const {
+bool ArcxConfig::Save(const std::string& path) const {
     std::string tmp = path + ".tmp";
     {
         std::ofstream out(tmp, std::ios::trunc);
