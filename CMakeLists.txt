@@ -22,6 +22,7 @@ add_library(ARCX SHARED
   src/Log.cpp
   src/Config.cpp
   src/FileScanner.cpp
+  src/RwDiag.cpp
   src/SkinManager.cpp
   src/SkinLoader.cpp
   src/Game.cpp

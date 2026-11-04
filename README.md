@@ -62,16 +62,20 @@ AmlCompat  → única capa que toca la API de AML
 2. Copia `libARCX64.so` a la carpeta `mods/` de AML, junto a tus otros mods:
    `Android_unprotected/data/com.rockstargames.gtasa/mods/libARCX64.so`.
    **El nombre debe terminar en `64.so`** (como `libCheatMenu64.so`). Si ARCX no aparece en la lista "List of loaded mods" del crash log de AML, no se cargó.
-3. Skins (la ruta se autodetecta; se puede forzar con `modloader_path` en `arcx_config.ini`):
+3. Skins: **cada método tiene su carpeta** (se cambia en AJUSTES; ARCX crea `ARCXLoader/` si no existe):
 
-```
-Android_unprotected/data/com.rockstargames.gtasa/modloader/
-├── ghost/   ghost.dff  ghost.txd
-├── venom/   venom_model.dff  venom_textures.txd   (nombres libres)
-└── soldier/ soldier.dff  soldier.txd  extra.png
-```
+| Método | Carpeta |
+|---|---|
+| ZyZ ModLoader (`special`) | `Android_unprotected/data/com.rockstargames.gtasa/files/modloader/<skin>/` |
+| Cargador ARCX (`builtin`) | `Android_unprotected/data/com.rockstargames.gtasa/files/ARCXLoader/<skin>/` |
+
+Dentro de cada carpeta de skin: `.dff`, `.txd` y/o imágenes (ARCX); con ZyZ, `<nombre>.dff` + `<nombre>.txd`.
+Se pueden forzar otras rutas con `modloader_path` / `arcxloader_path` en `arcx_config.ini`.
+
 Imágenes PNG/JPG: potencia de 2, ≤2048 px (no se reescalan).
 **Aviso:** toda subcarpeta con un `.dff` válido aparece como skin (también modelos de vehículos de otros mods); usa `modloader_path` apuntando a una carpeta dedicada si hace falta.
+
+Diagnóstico de texturas: al cargar con el cargador ARCX, `arcx.log` lista qué texturas pide el DFF y cuáles faltan en la carpeta de la skin (`Texture not in skin folder: ...`).
 
 Archivos generados en `.../com.rockstargames.gtasa/arcx/`: `arcx.log`, `arcx_config.ini`.
 
