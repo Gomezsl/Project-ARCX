@@ -1,12 +1,17 @@
 #include "ImGuiMenu.h"
 #include <algorithm>
 #include <atomic>
+#include <chrono>
 #include <mutex>
 #include <vector>
+#include "Game.h"
 #include "Log.h"
 #include "SkinManager.h"
 #include "imgui.h"
 #include "imgui_impl_opengl3.h"
+#include <EGL/egl.h>
+#include <GLES2/gl2.h>
+#include <cfloat>
 
 namespace {
 struct TouchEv { int action; float x, y; };  // 0 down, 1 move, 2 up
@@ -18,6 +23,8 @@ int g_page = 0;
 // Rectangulos (px) del ultimo frame, para decidir en el hilo del juego si un toque es del menu.
 std::atomic<int> g_btn[4], g_win[4];  // x0,y0,x1,y1
 std::atomic<bool> g_captured{false};
+typedef void (*PFNBINDVAO)(GLuint);
+PFNBINDVAO g_bindVao = nullptr;
 bool In(const std::atomic<int>* r, int x, int y) {
     return x >= r[0] && x <= r[2] && y >= r[1] && y <= r[3];
 }
@@ -29,7 +36,7 @@ bool OnTouchRaw(int a, int b, int c, int d) {
     // Mapeo VERIFICADO con arcx.log de un Samsung A14: a=2 DOWN, a=3 MOVE, a=1 UP; b=dedo; c=x, d=y (pixeles).
     static int logged = 0;
     if (logged < 8) { ++logged; Log::Info("Touch raw: a=%d b=%d c=%d d=%d", a, b, c, d); }
-    int act = (a == 2) ? 0 : (a == 3) ? 1 : (a == 1) ? 2 : -1;
+    int act = (a == 2) ? 0 : (a == 3) ? 1 : (a == 1 || a == 4) ? 2 : -1;
     if (act < 0) return false;
     bool inside = In(g_btn, c, d) || In(g_win, c, d);
     bool consume;
@@ -52,25 +59,90 @@ static void Init() {
     ImGuiStyle& st = ImGui::GetStyle();
     st.WindowRounding = 12; st.FrameRounding = 8; st.TabRounding = 8; st.GrabRounding = 8;
     st.ItemSpacing = ImVec2(10, 12);
-    ImGui_ImplOpenGL3_Init("#version 100");  // el juego enlaza libGLESv2 (contexto GLES2)
+    bool ok = ImGui_ImplOpenGL3_Init("#version 100");  // el juego enlaza libGLESv2 (contexto GLES2)
+    Log::Info("ImGui init: backend=%d GL_VERSION=%s", (int)ok, (const char*)glGetString(GL_VERSION));
+    // Fuerza la compilacion de shaders ahora para poder registrar un fallo (ImGui solo imprime a stderr).
+    if (!ImGui_ImplOpenGL3_CreateDeviceObjects()) Log::Error("ImGui: failed to create device objects (shader compile?)");
     g_init = true;
 }
 
 void Render(int w, int h) {
-    if (!g_init) Init();
+    static bool failed = false;
+    static EGLContext ctxOwner = EGL_NO_CONTEXT;
+    if (failed) return;
+    EGLContext ctx = eglGetCurrentContext();
+    if (ctx == EGL_NO_CONTEXT || w < 200 || h < 200) return;
+
+    if (!g_init) {                       // ImGui se crea en el PRIMER contexto visto y solo se dibuja en ese
+        ctxOwner = ctx;
+        g_bindVao = (PFNBINDVAO)eglGetProcAddress("glBindVertexArray");
+        if (!g_bindVao) g_bindVao = (PFNBINDVAO)eglGetProcAddress("glBindVertexArrayOES");
+        Init();
+        if (!g_init) { failed = true; return; }
+        Log::Info("ImGui context owner=%p VAO=%s", ctx, g_bindVao ? "yes" : "no");
+    }
+    if (ctx != ctxOwner) {
+        static int other = 0;
+        if (other++ < 5) Log::Info("Swap from a different EGL context (%p != %p): skipped", ctx, ctxOwner);
+        return;
+    }
+    // Solo en partida y sin pausa; si no, no se muestra ni el boton ni el panel.
+    if (Game::IsInitialized() && (Game::IsPaused() || !Game::PlayerPresent())) {
+        g_open = false;
+        for (auto& v : g_btn) v = -1;
+        for (auto& v : g_win) v = -1;
+        return;
+    }
+
     ImGuiIO& io = ImGui::GetIO();
     io.DisplaySize = ImVec2((float)w, (float)h);
     io.FontGlobalScale = std::max(1.0f, h / 540.0f);
+    static auto last = std::chrono::steady_clock::now();
+    auto now = std::chrono::steady_clock::now();
+    float dt = std::chrono::duration<float>(now - last).count();
+    last = now;
+    io.DeltaTime = dt > 0.0001f ? std::min(dt, 0.25f) : 1.0f / 60.0f;
 
     {
         std::lock_guard<std::mutex> lk(g_mx);
         for (auto& e : g_events) {
             io.AddMousePosEvent(e.x, e.y);
             if (e.action == 0) io.AddMouseButtonEvent(0, true);
-            if (e.action == 2) io.AddMouseButtonEvent(0, false);
+            if (e.action == 2) { io.AddMouseButtonEvent(0, false); io.AddMousePosEvent(-FLT_MAX, -FLT_MAX); }
         }
         g_events.clear();
     }
+
+    // ---- guardar el estado de GL del juego y dejarlo limpio para ImGui (tecnica de Skins-selector) ----
+    struct AttribSt { GLint en, size, type, norm, stride, buf; void* ptr; };
+    AttribSt as[16];
+    GLint maxAttr = 8, lastArrayBuf = 0, lastElem = 0, lastVao = 0, lastFbo = 0, prevVp[4] = {0, 0, 0, 0};
+    GLboolean cm[4] = {1, 1, 1, 1};
+    glGetIntegerv(GL_FRAMEBUFFER_BINDING, &lastFbo);
+    glGetIntegerv(GL_VIEWPORT, prevVp);
+    if (lastFbo != 0) glBindFramebuffer(GL_FRAMEBUFFER, 0);   // en gameplay el juego deja un FBO fuera de pantalla enlazado
+    glViewport(0, 0, w, h);
+    glGetIntegerv(GL_MAX_VERTEX_ATTRIBS, &maxAttr);
+    if (maxAttr > 16) maxAttr = 16;
+    glGetIntegerv(GL_ELEMENT_ARRAY_BUFFER_BINDING, &lastElem);
+    glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &lastArrayBuf);
+    for (int i = 0; i < maxAttr; i++) {
+        AttribSt& a = as[i];
+        a.en = a.size = a.type = a.norm = a.stride = a.buf = 0;
+        a.ptr = nullptr;
+        glGetVertexAttribiv(i, GL_VERTEX_ATTRIB_ARRAY_ENABLED, &a.en);
+        glGetVertexAttribiv(i, GL_VERTEX_ATTRIB_ARRAY_SIZE, &a.size);
+        glGetVertexAttribiv(i, GL_VERTEX_ATTRIB_ARRAY_TYPE, &a.type);
+        glGetVertexAttribiv(i, GL_VERTEX_ATTRIB_ARRAY_NORMALIZED, &a.norm);
+        glGetVertexAttribiv(i, GL_VERTEX_ATTRIB_ARRAY_STRIDE, &a.stride);
+        glGetVertexAttribiv(i, GL_VERTEX_ATTRIB_ARRAY_BUFFER_BINDING, &a.buf);
+        glGetVertexAttribPointerv(i, GL_VERTEX_ATTRIB_ARRAY_POINTER, &a.ptr);
+    }
+    glGetBooleanv(GL_COLOR_WRITEMASK, cm);
+    if (g_bindVao) { glGetIntegerv(0x85B5 /* GL_VERTEX_ARRAY_BINDING */, &lastVao); g_bindVao(0); }
+    for (int i = 0; i < maxAttr; i++) glDisableVertexAttribArray(i);
+    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+    while (glGetError() != GL_NO_ERROR) {}
 
     ImGui_ImplOpenGL3_NewFrame();
     ImGui::NewFrame();
@@ -130,6 +202,9 @@ void Render(int w, int h) {
                 bool changed = false;
                 changed |= ImGui::Checkbox("Recordar skin", &c.rememberSkin);
                 changed |= ImGui::Checkbox("Aplicar al iniciar", &c.applyOnStart);
+                bool builtin = (c.loadMethod == "builtin");
+                if (ImGui::Checkbox("Cargador ARCX (sin ZyZ ModLoader)", &builtin)) { c.loadMethod = builtin ? "builtin" : "special"; changed = true; }
+                ImGui::TextDisabled(builtin ? "Metodo: ARCX lee DFF/TXD/PNG de la carpeta" : "Metodo: ZyZ ModLoader carga <modelo>.dff por nombre");
                 if (changed) sm.SaveConfig();
                 if (ImGui::Button("REESCANEAR")) { sm.Rescan(); g_page = 0; }
                 ImGui::TextWrapped("Ruta: %s", view.modloaderPath.c_str());
@@ -145,7 +220,28 @@ void Render(int w, int h) {
     }
 
     ImGui::Render();
-    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+    ImDrawData* dd = ImGui::GetDrawData();
+    ImGui_ImplOpenGL3_RenderDrawData(dd);
+
+    static int diag = 0;
+    if (diag < 3) {
+        ++diag;
+        Log::Info("ImGui frame %d: display=%dx%d prevFbo=%d vtx=%d glError=0x%x", diag, w, h, lastFbo, dd ? dd->TotalVtxCount : -1, glGetError());
+    }
+
+    // ---- devolver el estado al juego ----
+    if (lastFbo != 0) glBindFramebuffer(GL_FRAMEBUFFER, (GLuint)lastFbo);
+    glViewport(prevVp[0], prevVp[1], prevVp[2], prevVp[3]);
+    if (g_bindVao) g_bindVao((GLuint)lastVao);
+    for (int i = 0; i < maxAttr; i++) {
+        const AttribSt& a = as[i];
+        glBindBuffer(GL_ARRAY_BUFFER, (GLuint)a.buf);
+        glVertexAttribPointer(i, a.size > 0 ? a.size : 4, a.type ? (GLenum)a.type : GL_FLOAT, a.norm ? GL_TRUE : GL_FALSE, a.stride, a.ptr);
+        if (a.en) glEnableVertexAttribArray(i); else glDisableVertexAttribArray(i);
+    }
+    glBindBuffer(GL_ARRAY_BUFFER, (GLuint)lastArrayBuf);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, (GLuint)lastElem);
+    glColorMask(cm[0], cm[1], cm[2], cm[3]);
 }
 
 void Shutdown() {

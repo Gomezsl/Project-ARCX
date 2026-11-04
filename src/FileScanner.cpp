@@ -99,6 +99,7 @@ std::vector<SkinInfo> ScanSkins(const std::string& root) {
         s.name = name;
         s.folder = it->path().string();
         s.dffPath = PickPreferred(dffs, name);
+        s.modelName = fs::path(s.dffPath).stem().string();
         if (dffs.size() > 1) Log::Info("Folder %s has %zu DFFs, using %s", name.c_str(), dffs.size(), s.dffPath.c_str());
         s.txdPath = PickPreferred(txds, name);
         std::sort(imgs.begin(), imgs.end());

@@ -88,19 +88,37 @@ void SkinManager::OnGameTick() {
     if (!apply && !remove) return;
 
     if (remove) {
-        bool ok = Game::RemoveSkin();
+        std::string rerr;
+        bool special = m_cfg.loadMethod == "special";
+        bool ok = special ? Game::RestoreCJ(&rerr) : Game::RemoveSkin();
         std::lock_guard<std::mutex> lk(m_mx);
         if (ok) {
             if (m_hasCurrent) { SkinLoader::Release(m_current); m_hasCurrent = false; }
             for (auto& s : m_skins) s.loaded = false;
             m_active = -1;
         }
-        m_status = ok ? "Skin removida" : "Error al quitar la skin (ver arcx.log)";
+        m_status = ok ? "Skin removida (CJ)" : (rerr.empty() ? "Error al quitar la skin (ver arcx.log)" : "Error: " + rerr);
         return;
     }
 
     Log::Info("Applying %s...", info.name.c_str());
     std::string status;
+    if (m_cfg.loadMethod == "special") {
+        // El juego (con ZyZ ModLoader) carga <modelName>.dff/.txd de modloader/ por nombre.
+        std::string err;
+        if (Game::ApplySpecialChar(info.modelName, &err)) {
+            std::lock_guard<std::mutex> lk(m_mx);
+            for (auto& sk : m_skins) sk.loaded = false;
+            if (idx < (int)m_skins.size()) m_skins[idx].loaded = true;
+            m_active = idx;
+            if (m_cfg.rememberSkin) { m_cfg.lastSkin = info.name; m_cfg.Save(m_cfgPath); }
+            m_status = "Skin aplicada: " + info.name;
+        } else {
+            std::lock_guard<std::mutex> lk(m_mx);
+            m_status = "Error: " + err;
+        }
+        return;
+    }
     if (m_hasCurrent && m_current.name == info.name) {
         // Ya residente: reutilizar recurso, solo reconstruir el ped.
         Log::Info("%s already loaded, reusing resource", info.name.c_str());
@@ -115,6 +133,7 @@ void SkinManager::OnGameTick() {
         } else {
             std::lock_guard<std::mutex> lk(m_mx);
             if (m_hasCurrent) SkinLoader::Release(m_current);  // solo TXD: el clump anterior lo destruyo el juego
+            ls.dff.clear(); ls.dff.shrink_to_fit();   // el juego ya tiene el clump; solo se conserva el TXD
             m_current = ls; m_hasCurrent = true;
             for (auto& s : m_skins) s.loaded = false;
             if (idx < (int)m_skins.size()) m_skins[idx].loaded = true;

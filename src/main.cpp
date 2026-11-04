@@ -25,8 +25,14 @@ EGLBoolean (*g_origSwap)(EGLDisplay, EGLSurface) = nullptr;
 
 void RenderOverlay(EGLDisplay d, EGLSurface s) {
     EGLint w = 0, h = 0;
-    eglQuerySurface(d, s, EGL_WIDTH, &w);
-    eglQuerySurface(d, s, EGL_HEIGHT, &h);
+    EGLBoolean okW = eglQuerySurface(d, s, EGL_WIDTH, &w);
+    EGLBoolean okH = eglQuerySurface(d, s, EGL_HEIGHT, &h);
+    static int diag = 0;
+    if (diag < 3) {
+        ++diag;
+        Log::Info("Swap #%d: display=%p surface=%p ctx=%p size=%dx%d query=%d/%d", diag, d, s, eglGetCurrentContext(), w, h, (int)okW, (int)okH);
+        if (!eglGetCurrentContext()) Log::Error("No EGL context current in the swap hook thread: nothing can be drawn here");
+    }
     if (w > 0 && h > 0) {
         if (!Game::IsTickHooked()) SkinManager::Get().OnGameTick();  // ultimo recurso (hilo de render, inseguro)
         Menu::Render(w, h);
@@ -82,16 +88,12 @@ extern "C" __attribute__((visibility("default"))) void OnModLoad() {
     Game::SetTickCallback(GameTick);
     Game::SetTouchCallback(OnTouchRaw);
     Game::SetSwapCallback(OnGameSwap);
-    Game::HookFunctions();
 
-    if (!Game::IsSwapHooked()) {
-        void* egl = dlopen("libEGL.so", RTLD_NOW);
-        void* swap = egl ? dlsym(egl, "eglSwapBuffers") : nullptr;
-        if (!Aml::Hook(swap, (void*)&Hooked_eglSwapBuffers, (void**)&g_origSwap))
-            Log::Error("Failed to hook eglSwapBuffers: el menu ImGui no se dibujara");
-        else
-            Log::Info("Menu hook: eglSwapBuffers (respaldo)");
-    } else {
-        Log::Info("Menu hook: NVEventEGLSwapBuffers");
-    }
+    // Via principal: eglSwapBuffers (la misma que usa Skins-selector, comprobada en dispositivo).
+    // Respaldo: NVEventEGLSwapBuffers del propio juego. Nunca las dos a la vez (se dibujaria doble).
+    void* swapFn = dlsym(RTLD_DEFAULT, "eglSwapBuffers");
+    bool eglOk = swapFn && Aml::Hook(swapFn, (void*)&Hooked_eglSwapBuffers, (void**)&g_origSwap);
+    Log::Info("Menu hook eglSwapBuffers (%p): %s", swapFn, eglOk ? "ok" : "FAILED");
+    Game::HookFunctions(!eglOk);
+    if (!eglOk) Log::Info("Menu hook fallback: NVEventEGLSwapBuffers %s", Game::IsSwapHooked() ? "ok" : "FAILED");
 }

@@ -9,6 +9,7 @@
 #include "Log.h"
 
 #define STB_IMAGE_IMPLEMENTATION
+#define STBIDEF static  // no exportar simbolos stb desde el .so
 #define STBI_ONLY_PNG
 #define STBI_ONLY_JPEG
 #define STBI_NO_STDIO
@@ -54,11 +55,44 @@ RwTexDictionary* LoadTxdFromFile(const RwApi& rw, const std::string& path) {
     return d;
 }
 
-// Convierte png/jpg a RwTexture y la anade al diccionario. EXPERIMENTAL en movil: el motor puede esperar
-// formatos de raster concretos; requiere dimensiones potencia de 2 (no se reescala).
+// Convierte una imagen a RwTexture y la anade al diccionario.
+//  - .png: decodificador del propio juego (RtPNGImageRead) -> RwImageFindRasterFormat -> raster (camino del juego).
+//  - .jpg/.jpeg (o PNG si RtPNG no esta): stb_image, RGBA8888. Requiere potencia de 2 y <=2048.
+// EXPERIMENTAL en movil: el formato de raster puede necesitar ajustes.
+bool AddTexture(const RwApi& rw, RwTexDictionary* dict, RwImage* img, const std::string& path, bool nativeFormat) {
+    if (!img) return false;
+    int w = img->width, h = img->height, depth = img->depth, flags = 0;
+    if (nativeFormat && rw.RwImageFindRasterFormat) {
+        if (!rw.RwImageFindRasterFormat(img, rwRASTERTYPETEXTURE, &w, &h, &depth, &flags)) return false;
+    } else {
+        depth = 32; flags = rwRASTERTYPETEXTURE | rwRASTERFORMAT8888;
+    }
+    RwRaster* r = rw.RwRasterCreate(w, h, depth, (uint32_t)flags);
+    if (!r || !rw.RwRasterSetFromImage(r, img)) return false;
+    RwTexture* t = rw.RwTextureCreate(r);
+    if (!t) return false;
+    std::string stem = fs::path(path).stem().string().substr(0, 31);
+    rw.RwTextureSetName(t, stem.c_str());
+    return rw.RwTexDictionaryAddTexture(dict, t) != nullptr;
+}
+
 bool AddImageTexture(const RwApi& rw, RwTexDictionary* dict, const std::string& path) {
+    std::string ext = fs::path(path).extension().string();
+    for (auto& c : ext) c = (char)tolower((unsigned char)c);
+    std::error_code ec;
+    uint64_t sz = fs::file_size(path, ec);
+    if (ec || sz == 0 || sz > kMaxImageBytes) { Log::Error("Image unreadable or too large: %s", path.c_str()); return false; }
+
+    if (ext == ".png" && rw.RtPNGImageRead && rw.RwImageDestroy) {
+        RwImage* img = rw.RtPNGImageRead(path.c_str());
+        bool ok = false;
+        if (img) { ok = AddTexture(rw, dict, img, path, true); rw.RwImageDestroy(img); }
+        if (ok) return true;
+        Log::Error("Game PNG reader failed, trying stb: %s", path.c_str());
+    }
+    if (!rw.CanLoadImages()) { Log::Error("Game function unavailable: image->texture conversion"); return false; }
     std::vector<uint8_t> buf;
-    if (!ReadFile(path, kMaxImageBytes, buf)) { Log::Error("Image unreadable: %s", path.c_str()); return false; }
+    if (!ReadFile(path, kMaxImageBytes, buf)) return false;
     int w = 0, h = 0, n = 0;
     uint8_t* px = stbi_load_from_memory(buf.data(), (int)buf.size(), &w, &h, &n, 4);
     if (!px) { Log::Error("Invalid image: %s", path.c_str()); return false; }
@@ -68,15 +102,7 @@ bool AddImageTexture(const RwApi& rw, RwTexDictionary* dict, const std::string& 
     } else if (RwImage* img = rw.RwImageCreate(w, h, 32)) {
         if (rw.RwImageAllocatePixels(img) && img->cpPixels && img->stride >= w * 4) {
             for (int y = 0; y < h; ++y) memcpy(img->cpPixels + (size_t)y * img->stride, px + (size_t)y * w * 4, (size_t)w * 4);
-            if (RwRaster* r = rw.RwRasterCreate(w, h, 32, rwRASTERTYPETEXTURE | rwRASTERFORMAT8888)) {
-                if (rw.RwRasterSetFromImage(r, img)) {
-                    if (RwTexture* t = rw.RwTextureCreate(r)) {
-                        std::string stem = fs::path(path).stem().string().substr(0, 31);
-                        rw.RwTextureSetName(t, stem.c_str());
-                        ok = rw.RwTexDictionaryAddTexture(dict, t) != nullptr;
-                    }
-                }
-            }
+            ok = AddTexture(rw, dict, img, path, false);
         }
         rw.RwImageDestroy(img);
     }
@@ -110,19 +136,16 @@ bool Load(const SkinInfo& info, LoadedSkin& out, int maxResidentMB) {
     if (avail && avail < mb * 4 + 128) { Log::Error("Not enough free memory (%zu MB available)", avail); return false; }
 
     Log::Info("Loading %s...", info.name.c_str());
-    std::vector<uint8_t> dff;
+    LoadedSkin ls;
+    ls.name = info.name;
     if (!FileScanner::IsValidRwFile(info.dffPath, FileScanner::kChunkClump) ||
-        !ReadFile(info.dffPath, FileScanner::kMaxFileBytes, dff)) {
+        !ReadFile(info.dffPath, FileScanner::kMaxFileBytes, ls.dff)) {
         Log::Error("DFF not found or invalid: %s", info.dffPath.c_str());
         return false;
     }
+    Log::Info("DFF: %s (%zu bytes)", info.dffPath.c_str(), ls.dff.size());
 
-    LoadedSkin ls;
-    ls.name = info.name;
-    bool hasImages = !info.imagePaths.empty() && rw.CanLoadImages();
-    if (!info.imagePaths.empty() && !rw.CanLoadImages())
-        Log::Error("Game function unavailable: image->texture conversion; imagenes ignoradas");
-
+    bool hasImages = !info.imagePaths.empty();
     // TXD (compartido si no se mezclan imagenes)
     if (!info.txdPath.empty() && !hasImages) {
         auto it = g_txdCache.find(info.txdPath);
@@ -132,34 +155,21 @@ bool Load(const SkinInfo& info, LoadedSkin& out, int maxResidentMB) {
     } else if (!info.txdPath.empty() || hasImages) {
         ls.txd = !info.txdPath.empty() ? LoadTxdFromFile(rw, info.txdPath) : rw.RwTexDictionaryCreate();
         if (!ls.txd) return false;
-        if (hasImages) for (auto& p : info.imagePaths) AddImageTexture(rw, ls.txd, p);
+        if (hasImages) {
+            int ok = 0;
+            for (auto& p : info.imagePaths) ok += AddImageTexture(rw, ls.txd, p) ? 1 : 0;
+            Log::Info("Images converted: %d/%zu", ok, info.imagePaths.size());
+        }
     }
-
-    // DFF con el TXD como diccionario actual para que los materiales enlacen sus texturas.
-    RwTexDictionary* prev = rw.RwTexDictionaryGetCurrent();
-    if (ls.txd) rw.RwTexDictionarySetCurrent(ls.txd);
-    RwMemory mem{dff.data(), (uint32_t)dff.size()};
-    RwStream* s = rw.RwStreamOpen(rwSTREAMMEMORY, rwSTREAMREAD, &mem);
-    if (s) {
-        if (rw.RwStreamFindChunk(s, FileScanner::kChunkClump, nullptr, nullptr)) ls.clump = rw.RpClumpStreamRead(s);
-        rw.RwStreamClose(s, &mem);
-    }
-    rw.RwTexDictionarySetCurrent(prev);
-
-    if (!ls.clump) {
-        Log::Error("Failed to load model: %s", info.dffPath.c_str());
-        Release(ls);
-        return false;
-    }
-    out = ls;
-    Log::Info("%s loaded successfully", info.name.c_str());
+    out = std::move(ls);
+    Log::Info("%s resources ready", info.name.c_str());
     return true;
 }
 
 void Release(LoadedSkin& skin) {
     const RwApi& rw = Game::Rw();
-    if (skin.clump && !skin.clumpOwnedByGame && rw.RpClumpDestroy) rw.RpClumpDestroy(skin.clump);
-    skin.clump = nullptr;
+    skin.dff.clear();
+    skin.dff.shrink_to_fit();
     if (skin.txd) {
         if (!skin.txdKey.empty()) {
             auto it = g_txdCache.find(skin.txdKey);
