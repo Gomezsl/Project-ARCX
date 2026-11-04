@@ -69,7 +69,9 @@ AmlCompat  → única capa que toca la API de AML
 | ZyZ ModLoader (`special`) | `Android_unprotected/data/com.rockstargames.gtasa/files/modloader/<skin>/` |
 | Cargador ARCX (`builtin`) | `Android_unprotected/data/com.rockstargames.gtasa/files/ARCXLoader/<skin>/` |
 
-Dentro de cada carpeta de skin: `.dff`, `.txd` y/o imágenes (ARCX); con ZyZ, `<nombre>.dff` + `<nombre>.txd`.
+Dentro de cada carpeta de skin: `.dff`, `.txd` y/o imágenes `.png/.jpg/.tga/.bmp` (ARCX); con ZyZ, `<nombre>.dff` + `<nombre>.txd`. Las texturas y TXD se buscan también en subcarpetas (hasta 3 niveles). Los `.dff` que no son personajes (vehículos/objetos, sin datos Skin/HAnim) se ocultan; se puede desactivar en AJUSTES (`ped_filter=0`).
+
+Sin ZyZ ModLoader, ARCX solo ve lo que haya **dentro de su carpeta de skin**: copia ahí el `.dff` **y** todas sus texturas.
 Se pueden forzar otras rutas con `modloader_path` / `arcxloader_path` en `arcx_config.ini`.
 
 Imágenes PNG/JPG: potencia de 2, ≤2048 px (no se reescalan).
