@@ -18,6 +18,15 @@ Plugin nativo `libARCX64.so` (arm64-v8a) para **Android Mod Loader (AML)** con m
 
 El plugin registra en `arcx.log` cada función resuelta (`Resolved ... via symbol`) o faltante (`Game function unavailable`). Aplicar una skin sigue **sin estar probado en dispositivo**: el reemplazo del clump del modelo del jugador es una estrategia no verificada (ver `docs/REVERSING.md`).
 
+## Métodos de carga de skins (`load_method` en `arcx_config.ini`)
+
+| Método | Cómo funciona | Estado |
+|---|---|---|
+| `special` (por defecto, cámbialo en Ajustes) | Usa las funciones del propio juego: `CStreaming::RequestSpecialChar` → `LoadAllRequestedModels` → comprobación (id 290–310, `CPedModelInfo`) → `CEntity::DeleteRwObject` + `CPed::SetModelIndex`. El `.dff`/`.txd` se leen **por nombre** desde `modloader/` (requiere ZyZ ModLoader). QUITAR SKIN vuelve a CJ (`CClothes::RebuildPlayer`). El flujo está tomado de *Skins-selector* (comprobado por su autor en dispositivo); los 13 símbolos usados existen en `libGTASA.so` 2.10. | ⚠️ Integrado en ARCX, sin probar |
+| `builtin` | **Cargador propio de ARCX** (no necesita ZyZ ModLoader): lee `.dff`/`.txd`/`.png` directamente de la carpeta de la skin, prepara las texturas (PNG con el decodificador del propio juego, `RtPNGImageRead`; JPG con stb) y deja que el juego registre el modelo con `CFileLoader::LoadClumpFile`, tras `CClumpModelInfo::DeleteRwObject`. Técnica deducida de los símbolos que importa `libCustomCharacter64.so` y reimplementada (no se copió código). Un hook en `CClumpModelInfo::SetClump` verifica que el clump se registró y, si no, restaura a CJ. | ⚠️ Implementado, sin probar en dispositivo |
+
+En modo `special` los archivos de la skin deben llamarse `<nombre>.dff` y `<nombre>.txd` (mismo nombre, ≤23 caracteres); no se cambia de skin dentro de un vehículo.
+
 ## A) Parte fácil vs B) Parte crítica
 
 **A (hecha):** `FileScanner` (carpetas, DFF/TXD/imágenes, elección del modelo por nombre de carpeta → `skin.*` → alfabético), `Config`, `Log`, `ImGuiMenu`, `SkinManager`.
@@ -87,3 +96,7 @@ cmake --build build   # → build/libARCX64.so
 ## Diferencias respecto a la estructura pedida
 
 Se omitieron `Android.mk`, `Application.mk` y `build.gradle` (innecesarios con CMake + NDK). Se añadió `AmlCompat` (capa AML) y `game/` (capa de versión).
+
+## SAUtils
+
+ARCX **no depende de SAUtils**. SAUtils (`libSAUtils64.so`) añade un menú "Mods Settings" al menú del juego y expone una interfaz AML (`GetInterface`) que usan otros plugins; integrar ARCX ahí es opcional y requiere el header de esa interfaz (`ISAUtils`), que no está en este repo. Mientras tanto ARCX usa su propio botón ImGui.

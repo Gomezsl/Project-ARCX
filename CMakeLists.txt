@@ -34,6 +34,13 @@ add_library(ARCX SHARED
   ${IMGUI}/backends/imgui_impl_opengl3.cpp
 )
 
+# ImGui con simbolos ocultos: otros mods (CheatMenu, etc.) traen su propio ImGui y, si el linker dinamico
+# enlazara nuestras llamadas con las suyas, compartiriamos GImGui y se romperia el dibujo.
+set_source_files_properties(
+  ${IMGUI}/imgui.cpp ${IMGUI}/imgui_draw.cpp ${IMGUI}/imgui_tables.cpp ${IMGUI}/imgui_widgets.cpp
+  ${IMGUI}/backends/imgui_impl_opengl3.cpp
+  PROPERTIES COMPILE_OPTIONS "-fvisibility=hidden;-fvisibility-inlines-hidden")
+
 target_include_directories(ARCX PRIVATE
   src ${IMGUI} ${IMGUI}/backends ${TP}/stb
   ${AML} ${AML}/include   # amlmod.h se incluye como <mod/amlmod.h>; verifica el layout de tu revision de AML
