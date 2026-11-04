@@ -14,6 +14,8 @@
 #define STBIDEF static  // no exportar simbolos stb desde el .so
 #define STBI_ONLY_PNG
 #define STBI_ONLY_JPEG
+#define STBI_ONLY_TGA
+#define STBI_ONLY_BMP
 #define STBI_NO_STDIO
 #include "stb_image.h"
 
@@ -159,6 +161,13 @@ bool Load(const SkinInfo& info, LoadedSkin& out, int maxResidentMB) {
                 ++missing;
                 Log::Error("Texture not in skin folder: %s (el juego la buscara en sus propios TXD; si no existe se vera sin textura)", n.c_str());
             }
+        if (missing) {
+            Log::Info("Images found in folder (png/jpg/tga/bmp): %zu | TXD: %s", info.imagePaths.size(), info.txdPath.empty() ? "none" : "yes");
+            std::string list;
+            for (auto& f : info.otherFiles) list += f + "; ";
+            Log::Info("Other files in skin folder: %s", list.empty() ? "(none)" : list.c_str());
+            Log::Info("Para que ARCX cargue las texturas sin ZyZ, copia a la carpeta de la skin un .txd o imagenes cuyo nombre coincida con las texturas listadas");
+        }
         if (!info.txdPath.empty() && have.empty()) Log::Info("TXD texture names could not be read (formato nativo no reconocido): %s", info.txdPath.c_str());
         if (need.empty()) Log::Info("DFF has no textured materials (or unusual layout)");
         else if (!missing) Log::Info("All DFF textures are present in the skin folder");

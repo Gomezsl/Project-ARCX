@@ -5,12 +5,13 @@
 #include <cstring>
 #include <filesystem>
 #include "Log.h"
+#include "RwDiag.h"
 
 namespace fs = std::filesystem;
 
 namespace {
 // Extensible: agrega aqui nuevos formatos de imagen (el decodificador vive en SkinLoader).
-const char* const kImageExts[] = {".png", ".jpg", ".jpeg"};
+const char* const kImageExts[] = {".png", ".jpg", ".jpeg", ".tga", ".bmp"};
 
 std::string Lower(std::string s) {
     for (auto& c : s) c = (char)std::tolower((unsigned char)c);
@@ -51,13 +52,15 @@ bool IsValidRwFile(const std::string& path, uint32_t expectedChunk, std::string*
     return true;
 }
 
-std::vector<SkinInfo> ScanSkins(const std::string& root) {
+std::vector<SkinInfo> ScanSkins(const std::string& root, bool pedFilter) {
     std::vector<SkinInfo> out;
     std::error_code ec;
     if (!fs::is_directory(root, ec)) {
-        Log::Error("Modloader folder not found: %s", root.c_str());
+        Log::Error("Skins folder not found: %s", root.c_str());
         return out;
     }
+    constexpr int kMaxDepth = 3;
+    struct Item { std::string path; int depth; };
     for (fs::directory_iterator it(root, fs::directory_options::skip_permission_denied, ec), end;
          !ec && it != end; it.increment(ec)) {
         std::error_code e2;
@@ -66,48 +69,63 @@ std::vector<SkinInfo> ScanSkins(const std::string& root) {
         std::string name = it->path().filename().string();
         if (name.empty() || name[0] == '.') continue;
 
-        std::vector<std::string> dffs, txds, imgs;
-        uint64_t total = 0;
-        for (fs::directory_iterator fi(it->path(), fs::directory_options::skip_permission_denied, e2), fe;
+        std::vector<Item> dffs, txds, imgs;
+        std::vector<std::string> others;
+        for (fs::recursive_directory_iterator fi(it->path(), fs::directory_options::skip_permission_denied, e2), fe;
              !e2 && fi != fe; fi.increment(e2)) {
             std::error_code e3;
             auto fst = fi->symlink_status(e3);
-            if (e3 || !fs::is_regular_file(fst)) continue;  // sin symlinks
+            if (e3 || fs::is_symlink(fst)) { fi.disable_recursion_pending(); continue; }
+            if (fs::is_directory(fst)) { if (fi.depth() + 1 >= kMaxDepth) fi.disable_recursion_pending(); continue; }
+            if (!fs::is_regular_file(fst)) continue;
             std::string ext = Lower(fi->path().extension().string());
             std::string p = fi->path().string();
-            if (ext == ".dff") dffs.push_back(p);
-            else if (ext == ".txd") txds.push_back(p);
-            else if (IsImageExt(ext)) imgs.push_back(p);
+            int depth = fi.depth();
+            if (ext == ".dff") dffs.push_back({p, depth});
+            else if (ext == ".txd") txds.push_back({p, depth});
+            else if (IsImageExt(ext)) imgs.push_back({p, depth});
+            else if (others.size() < 60) others.push_back(fs::relative(fi->path(), it->path(), e3).string());
         }
 
-        // Solo DFF/TXD con cabecera valida participan en la eleccion.
-        auto keepValid = [&](std::vector<std::string>& v, uint32_t chunk, const char* kind) {
-            std::vector<std::string> ok;
-            for (auto& p : v) {
-                std::string err;
-                if (IsValidRwFile(p, chunk, &err)) ok.push_back(p);
-                else Log::Error("Invalid %s (%s): %s", kind, err.c_str(), p.c_str());
+        // Solo DFF/TXD con cabecera valida participan; los DFF sin datos de ped (vehiculos/objetos) se descartan si pedFilter.
+        std::vector<Item> vdff;
+        for (auto& d : dffs) {
+            std::string err;
+            if (!IsValidRwFile(d.path, kChunkClump, &err)) { Log::Error("Invalid DFF (%s): %s", err.c_str(), d.path.c_str()); continue; }
+            if (pedFilter && !RwDiag::FileLooksLikePed(d.path)) {
+                Log::Info("Ignoring non-ped model (no skin/HAnim data): %s", d.path.c_str());
+                continue;
             }
-            v.swap(ok);
-        };
-        keepValid(dffs, kChunkClump, "DFF");
-        keepValid(txds, kChunkTexDict, "TXD");
+            vdff.push_back(d);
+        }
+        if (vdff.empty()) continue;  // carpeta sin modelo valido -> ignorada
 
-        if (dffs.empty()) continue;  // carpeta sin modelo valido -> ignorada
+        int minDepth = 99;
+        for (auto& d : vdff) minDepth = std::min(minDepth, d.depth);
+        std::vector<std::string> dffPaths;
+        for (auto& d : vdff) if (d.depth == minDepth) dffPaths.push_back(d.path);
+
+        std::vector<std::string> txdPaths;
+        for (auto& t : txds) {
+            std::string err;
+            if (IsValidRwFile(t.path, kChunkTexDict, &err)) txdPaths.push_back(t.path);
+            else Log::Error("Invalid TXD (%s): %s", err.c_str(), t.path.c_str());
+        }
 
         SkinInfo s;
         s.name = name;
         s.folder = it->path().string();
-        s.dffPath = PickPreferred(dffs, name);
+        s.dffPath = PickPreferred(dffPaths, name);
         s.modelName = fs::path(s.dffPath).stem().string();
-        if (dffs.size() > 1) Log::Info("Folder %s has %zu DFFs, using %s", name.c_str(), dffs.size(), s.dffPath.c_str());
-        s.txdPath = PickPreferred(txds, name);
-        std::sort(imgs.begin(), imgs.end());
-        s.imagePaths = imgs;
+        if (dffPaths.size() > 1) Log::Info("Folder %s has %zu DFFs, using %s", name.c_str(), dffPaths.size(), s.dffPath.c_str());
+        s.txdPath = PickPreferred(txdPaths, name);
+        for (auto& i : imgs) s.imagePaths.push_back(i.path);
+        std::sort(s.imagePaths.begin(), s.imagePaths.end());
+        s.otherFiles = std::move(others);
         std::error_code e4;
-        total += fs::file_size(s.dffPath, e4);
+        uint64_t total = fs::file_size(s.dffPath, e4);
         if (!s.txdPath.empty()) total += fs::file_size(s.txdPath, e4);
-        for (auto& i : imgs) total += fs::file_size(i, e4);
+        for (auto& i : s.imagePaths) total += fs::file_size(i, e4);
         s.totalBytes = total;
         out.push_back(std::move(s));
     }

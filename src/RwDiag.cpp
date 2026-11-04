@@ -46,9 +46,42 @@ void WalkDff(const uint8_t* d, size_t len, size_t pos, size_t end, int depth, st
         pos = bend;
     }
 }
+bool FindPedChunk(const uint8_t* d, size_t len, size_t pos, size_t end, int depth) {
+    if (depth > 14) return false;
+    while (pos + 12 <= end) {
+        Hdr h;
+        if (!ReadHdr(d, len, pos, h)) return false;
+        size_t body = pos + 12, bend = body + h.size;
+        if (bend > end) return false;
+        if (h.type == 0x116 || h.type == 0x11E) return true;
+        switch (h.type) {   // contenedores: clump, geometry list, geometry, material list, material, frame list, extension, atomic
+            case 0x10: case 0x1A: case 0x0F: case 0x08: case 0x07: case 0x0E: case 0x03: case 0x14:
+                if (FindPedChunk(d, len, body, bend, depth + 1)) return true;
+                break;
+            default: break;
+        }
+        pos = bend;
+    }
+    return false;
+}
 }  // namespace
 
 namespace RwDiag {
+bool DffLooksLikePed(const std::vector<uint8_t>& dff) { return FindPedChunk(dff.data(), dff.size(), 0, dff.size(), 0); }
+
+bool FileLooksLikePed(const std::string& path) {
+    FILE* f = fopen(path.c_str(), "rb");
+    if (!f) return false;
+    fseek(f, 0, SEEK_END);
+    long sz = ftell(f);
+    fseek(f, 0, SEEK_SET);
+    if (sz < 12 || sz > (64l << 20)) { fclose(f); return false; }
+    std::vector<uint8_t> d((size_t)sz);
+    size_t n = fread(d.data(), 1, d.size(), f);
+    fclose(f);
+    return n == d.size() && DffLooksLikePed(d);
+}
+
 std::string Lower(std::string s) { for (auto& c : s) c = (char)std::tolower((unsigned char)c); return s; }
 
 std::vector<std::string> DffTextureNames(const std::vector<uint8_t>& dff) {

@@ -38,8 +38,9 @@ void SkinManager::SaveConfig() {
 void SkinManager::Rescan() {
     Log::Info("Scanning skins...");
     std::string root;
-    { std::lock_guard<std::mutex> lk(m_mx); root = ModloaderDir(); }
-    auto found = FileScanner::ScanSkins(root);  // IO fuera del lock
+    bool pedFilter = true;
+    { std::lock_guard<std::mutex> lk(m_mx); root = ModloaderDir(); pedFilter = m_cfg.pedFilter; }
+    auto found = FileScanner::ScanSkins(root, pedFilter);  // IO fuera del lock
     std::lock_guard<std::mutex> lk(m_mx);
     std::string activeName = (m_active >= 0 && m_active < (int)m_skins.size()) ? m_skins[m_active].name : "";
     std::string selName = (m_selected >= 0 && m_selected < (int)m_skins.size()) ? m_skins[m_selected].name : m_cfg.lastSkin;

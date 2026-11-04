@@ -10,6 +10,7 @@ struct SkinInfo {
     std::string dffPath;                 // modelo validado
     std::string txdPath;                 // vacio si la skin solo usa imagenes
     std::vector<std::string> imagePaths; // png/jpg/jpeg (convertidas a RwTexture al cargar)
+    std::vector<std::string> otherFiles; // otros archivos de la carpeta (diagnostico de texturas)
     uint64_t totalBytes = 0;
     bool loaded = false;                 // true solo mientras sus recursos estan residentes
 };

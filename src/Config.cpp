@@ -26,6 +26,7 @@ bool ArcxConfig::Load(const std::string& path) {
         std::string k = Trim(line.substr(0, eq)), v = Trim(line.substr(eq + 1));
         if (k == "remember_skin") rememberSkin = ToBool(v);
         else if (k == "apply_on_start") applyOnStart = ToBool(v);
+        else if (k == "ped_filter") pedFilter = ToBool(v);
         else if (k == "last_skin") lastSkin = v;
         else if (k == "modloader_path") modloaderPath = v;
         else if (k == "arcxloader_path") arcxLoaderPath = v;
@@ -44,6 +45,7 @@ bool ArcxConfig::Save(const std::string& path) const {
         out << "# Project ARCX\n"
             << "remember_skin=" << (rememberSkin ? 1 : 0) << "\n"
             << "apply_on_start=" << (applyOnStart ? 1 : 0) << "\n"
+            << "ped_filter=" << (pedFilter ? 1 : 0) << "\n"
             << "last_skin=" << lastSkin << "\n"
             << "modloader_path=" << modloaderPath << "\n"
             << "arcxloader_path=" << arcxLoaderPath << "\n"

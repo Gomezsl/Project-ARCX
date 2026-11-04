@@ -211,6 +211,7 @@ void Render(int w, int h) {
                 bool changed = false;
                 changed |= ImGui::Checkbox("Recordar skin", &c.rememberSkin);
                 changed |= ImGui::Checkbox("Aplicar al iniciar", &c.applyOnStart);
+                if (ImGui::Checkbox("Ocultar modelos que no son personajes", &c.pedFilter)) { sm.SaveConfig(); sm.Rescan(); g_page = 0; }
                 bool builtin = (c.loadMethod == "builtin");
                 if (ImGui::Checkbox("Cargador ARCX (sin ZyZ ModLoader)", &builtin)) { sm.SetBuiltin(builtin); g_page = 0; }
                 ImGui::TextDisabled(builtin ? "Metodo: ARCX lee DFF/TXD/PNG de la carpeta" : "Metodo: ZyZ ModLoader carga <modelo>.dff por nombre");

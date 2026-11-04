@@ -12,6 +12,7 @@ constexpr uint64_t kMaxFileBytes = 64ull << 20;
 // Valida existencia, archivo regular, tamano y cabecera RenderWare (tipo de chunk + tamano coherente).
 bool IsValidRwFile(const std::string& path, uint32_t expectedChunk, std::string* err = nullptr);
 
-// Escanea subcarpetas de `root` (no recursivo, ignora symlinks y carpetas sin DFF valido).
-std::vector<SkinInfo> ScanSkins(const std::string& root);
+// Escanea subcarpetas de `root` (ignora symlinks y carpetas sin DFF valido).
+// pedFilter: ignora DFF sin datos de ped (vehiculos/objetos). Busca TXD e imagenes hasta 3 niveles dentro de la carpeta.
+std::vector<SkinInfo> ScanSkins(const std::string& root, bool pedFilter);
 }
