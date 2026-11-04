@@ -31,8 +31,10 @@ struct RwApi {
     RwStream* (*RwStreamOpen)(uint32_t type, uint32_t access, const void* data) = nullptr;
     int (*RwStreamClose)(RwStream*, void* data) = nullptr;
     int (*RwStreamFindChunk)(RwStream*, uint32_t type, uint32_t* len, uint32_t* ver) = nullptr;
-    RpClump* (*RpClumpStreamRead)(RwStream*) = nullptr;
+    RpClump* (*RpClumpStreamRead)(RwStream*) = nullptr;   // ya no se usa: el cargador usa CFileLoader::LoadClumpFile
     int (*RpClumpDestroy)(RpClump*) = nullptr;
+    RwImage* (*RtPNGImageRead)(const char* path) = nullptr;           // decodificador PNG del propio juego
+    int (*RwImageFindRasterFormat)(RwImage*, int rasterType, int* w, int* h, int* depth, int* format) = nullptr;
     RwTexDictionary* (*RwTexDictionaryStreamRead)(RwStream*) = nullptr;
     RwTexDictionary* (*RwTexDictionaryCreate)() = nullptr;
     int (*RwTexDictionaryDestroy)(RwTexDictionary*) = nullptr;
@@ -48,9 +50,8 @@ struct RwApi {
     RwTexture* (*RwTextureSetName)(RwTexture*, const char*) = nullptr;
 
     bool CanLoadModel() const {
-        return RwStreamOpen && RwStreamClose && RwStreamFindChunk && RpClumpStreamRead && RpClumpDestroy &&
-               RwTexDictionaryStreamRead && RwTexDictionaryCreate && RwTexDictionaryDestroy &&
-               RwTexDictionaryGetCurrent && RwTexDictionarySetCurrent;
+        return RwStreamOpen && RwStreamClose && RwTexDictionaryStreamRead && RwStreamFindChunk &&
+               RwTexDictionaryCreate && RwTexDictionaryDestroy && RwTexDictionaryGetCurrent && RwTexDictionarySetCurrent;
     }
     bool CanLoadImages() const {
         return RwTexDictionaryAddTexture && RwImageCreate && RwImageAllocatePixels && RwImageDestroy &&
@@ -63,12 +64,32 @@ struct RwApi {
 struct GameApi {
     void* (*FindPlayerPed)(int playerId) = nullptr;                    // FindPlayerPed(-1)
     void** modelInfoPtrs = nullptr;                                    // CModelInfo::ms_modelInfoPtrs (dato)
-    void (*ClumpModelInfo_SetClump)(void* modelInfo, RpClump*) = nullptr;  // CPedModelInfo::SetClump
+    void (*ClumpModelInfo_SetClump)(void* modelInfo, RpClump*) = nullptr;  // CPedModelInfo::SetClump (sin uso)
+    // --- Cargador propio (tecnica observada en libCustomCharacter64.so, reimplementada) ---
+    void (*FileLoader_LoadClumpFile)(RwStream*, uint32_t modelId) = nullptr;  // CFileLoader::LoadClumpFile
+    void (*ClumpModelInfo_DeleteRwObject)(void* modelInfo) = nullptr;         // CClumpModelInfo::DeleteRwObject
+    void* clumpModelInfoSetClump = nullptr;                                   // CClumpModelInfo::SetClump (solo para hook de verificacion)
     void (*Entity_DeleteRwObject)(void* entity) = nullptr;             // CPed::DeleteRwObject
     void (*Ped_SetModelIndex)(void* ped, uint32_t modelId) = nullptr;  // CPed::SetModelIndex
 
-    bool CanApplySkin() const {
-        return FindPlayerPed && modelInfoPtrs && ClumpModelInfo_SetClump && Entity_DeleteRwObject && Ped_SetModelIndex;
+    // --- Via "personaje especial" (la que usa Skins-selector): el juego carga <nombre>.dff/.txd por nombre ---
+    void (*Streaming_RequestSpecialChar)(int slot, const char* name, int flags) = nullptr;
+    void (*Streaming_LoadAllRequestedModels)(bool) = nullptr;
+    bool (*Streaming_HasSpecialCharLoaded)(int slot) = nullptr;
+    void (*Streaming_SetMissionDoesntRequireSpecialChar)(int slot) = nullptr;
+    void* (*ModelInfo_GetByName)(const char* name, int* outIndex) = nullptr;  // CModelInfo::GetModelInfo(name,&idx)
+    void* (*FindPlayerVehicle)(int playerId, bool) = nullptr;
+    void (*Clothes_RebuildPlayer)(void* playerPed, bool) = nullptr;           // volver a CJ
+    const volatile uint8_t* timerUserPause = nullptr;                         // CTimer::m_UserPause
+    const volatile uint8_t* timerCodePause = nullptr;                         // CTimer::m_CodePause
+
+    bool CanApplySpecialChar() const {
+        return FindPlayerPed && Entity_DeleteRwObject && Ped_SetModelIndex && Streaming_RequestSpecialChar &&
+               Streaming_LoadAllRequestedModels && Streaming_HasSpecialCharLoaded && ModelInfo_GetByName;
+    }
+    bool CanApplySkin() const {   // cargador propio
+        return FindPlayerPed && modelInfoPtrs && FileLoader_LoadClumpFile && ClumpModelInfo_DeleteRwObject &&
+               Entity_DeleteRwObject && Ped_SetModelIndex;
     }
 };
 
