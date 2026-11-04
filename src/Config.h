@@ -5,7 +5,8 @@ struct ArcxConfig {
     bool rememberSkin = true;
     bool applyOnStart = true;
     std::string lastSkin;       // nombre de carpeta de la ultima skin aplicada
-    std::string modloaderPath;  // vacio = autodetectar
+    std::string modloaderPath;  // metodo "special": vacio = <datos>/files/modloader
+    std::string arcxLoaderPath; // metodo "builtin": vacio = <datos>/files/ARCXLoader
     std::string loadMethod = "special";  // "special" = el juego/ModLoader carga <modelo>.dff por nombre; "builtin" = RenderWare propio (experimental)
     int skinsPerPage = 4;       // 3..10
     int maxResidentMB = 64;     // limite de seguridad para recursos de una skin

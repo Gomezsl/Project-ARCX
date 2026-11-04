@@ -28,6 +28,7 @@ bool ArcxConfig::Load(const std::string& path) {
         else if (k == "apply_on_start") applyOnStart = ToBool(v);
         else if (k == "last_skin") lastSkin = v;
         else if (k == "modloader_path") modloaderPath = v;
+        else if (k == "arcxloader_path") arcxLoaderPath = v;
         else if (k == "load_method") loadMethod = (v == "builtin") ? "builtin" : "special";
         else if (k == "skins_per_page") skinsPerPage = std::clamp(atoi(v.c_str()), 3, 10);
         else if (k == "max_resident_mb") maxResidentMB = std::clamp(atoi(v.c_str()), 8, 512);
@@ -45,6 +46,7 @@ bool ArcxConfig::Save(const std::string& path) const {
             << "apply_on_start=" << (applyOnStart ? 1 : 0) << "\n"
             << "last_skin=" << lastSkin << "\n"
             << "modloader_path=" << modloaderPath << "\n"
+            << "arcxloader_path=" << arcxLoaderPath << "\n"
             << "load_method=" << loadMethod << "\n"
             << "skins_per_page=" << skinsPerPage << "\n"
             << "max_resident_mb=" << maxResidentMB << "\n";

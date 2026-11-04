@@ -20,6 +20,7 @@ std::vector<TouchEv> g_events;
 bool g_init = false;
 bool g_open = false;
 int g_page = 0;
+int g_tab = 0;  // 0 = SKINS, 1 = AJUSTES
 // Rectangulos (px) del ultimo frame, para decidir en el hilo del juego si un toque es del menu.
 std::atomic<int> g_btn[4], g_win[4];  // x0,y0,x1,y1
 std::atomic<bool> g_captured{false};
@@ -173,8 +174,18 @@ void Render(int w, int h) {
         if (!view.gameReady)
             ImGui::TextColored(ImVec4(1, 0.7f, 0.2f, 1), "Integracion con el juego incompleta (ver arcx.log)");
 
-        if (ImGui::BeginTabBar("##tabs")) {
-            if (ImGui::BeginTabItem("SKINS")) {
+        {
+            // Pestanas hechas con botones normales: las TabItem de ImGui no respondian al toque en este juego.
+            const ImVec2 tabSize(ImGui::GetWindowWidth() * 0.5f - 20.0f * fs, 34.0f * fs);
+            for (int t = 0; t < 2; ++t) {
+                bool active = (g_tab == t);
+                ImGui::PushStyleColor(ImGuiCol_Button, active ? ImVec4(0.20f, 0.45f, 0.70f, 1.0f) : ImVec4(0.18f, 0.18f, 0.20f, 1.0f));
+                if (ImGui::Button(t == 0 ? "SKINS" : "AJUSTES", tabSize)) g_tab = t;
+                ImGui::PopStyleColor();
+                if (t == 0) ImGui::SameLine();
+            }
+            ImGui::Separator();
+            if (g_tab == 0) {
                 const int per = std::max(3, sm.Cfg().skinsPerPage);
                 const int total = (int)view.names.size();
                 const int pages = std::max(1, (total + per - 1) / per);
@@ -195,22 +206,18 @@ void Render(int w, int h) {
                 ImGui::SameLine();
                 if (ImGui::Button("QUITAR SKIN")) sm.RequestRemove();
                 ImGui::TextWrapped("%s", view.status.c_str());
-                ImGui::EndTabItem();
-            }
-            if (ImGui::BeginTabItem("AJUSTES")) {
+            } else {
                 ArcxConfig& c = sm.Cfg();
                 bool changed = false;
                 changed |= ImGui::Checkbox("Recordar skin", &c.rememberSkin);
                 changed |= ImGui::Checkbox("Aplicar al iniciar", &c.applyOnStart);
                 bool builtin = (c.loadMethod == "builtin");
-                if (ImGui::Checkbox("Cargador ARCX (sin ZyZ ModLoader)", &builtin)) { c.loadMethod = builtin ? "builtin" : "special"; changed = true; }
+                if (ImGui::Checkbox("Cargador ARCX (sin ZyZ ModLoader)", &builtin)) { sm.SetBuiltin(builtin); g_page = 0; }
                 ImGui::TextDisabled(builtin ? "Metodo: ARCX lee DFF/TXD/PNG de la carpeta" : "Metodo: ZyZ ModLoader carga <modelo>.dff por nombre");
                 if (changed) sm.SaveConfig();
                 if (ImGui::Button("REESCANEAR")) { sm.Rescan(); g_page = 0; }
                 ImGui::TextWrapped("Ruta: %s", view.modloaderPath.c_str());
-                ImGui::EndTabItem();
             }
-            ImGui::EndTabBar();
         }
         {
             ImVec2 p = ImGui::GetWindowPos(), z = ImGui::GetWindowSize();

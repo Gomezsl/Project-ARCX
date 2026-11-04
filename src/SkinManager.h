@@ -18,7 +18,8 @@ public:
     };
 
     static SkinManager& Get();
-    void Init(const std::string& configPath, const std::string& defaultModloader);
+    void Init(const std::string& configPath, const std::string& zyzRoot, const std::string& arcxRoot);
+    void SetBuiltin(bool builtin);  // cambia de metodo, guarda y reescanea la carpeta que corresponda
     void Rescan();
     View Snapshot();
     void Select(int index);
@@ -33,7 +34,7 @@ private:
 
     std::mutex m_mx;
     ArcxConfig m_cfg;
-    std::string m_cfgPath, m_defaultRoot;
+    std::string m_cfgPath, m_zyzRoot, m_arcxRoot;
     std::vector<SkinInfo> m_skins;
     int m_selected = -1, m_active = -1;
     bool m_pendingApply = false, m_pendingRemove = false, m_startupDone = false;

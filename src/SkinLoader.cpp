@@ -1,4 +1,5 @@
 #include "SkinLoader.h"
+#include <algorithm>
 #include <cstdio>
 #include <cstring>
 #include <map>
@@ -7,6 +8,7 @@
 #include "FileScanner.h"
 #include "Game.h"
 #include "Log.h"
+#include "RwDiag.h"
 
 #define STB_IMAGE_IMPLEMENTATION
 #define STBIDEF static  // no exportar simbolos stb desde el .so
@@ -144,6 +146,23 @@ bool Load(const SkinInfo& info, LoadedSkin& out, int maxResidentMB) {
         return false;
     }
     Log::Info("DFF: %s (%zu bytes)", info.dffPath.c_str(), ls.dff.size());
+
+    // Diagnostico: que texturas pide el DFF y cuales aporta la carpeta de la skin.
+    {
+        std::vector<std::string> need = RwDiag::DffTextureNames(ls.dff), have;
+        if (!info.txdPath.empty()) have = RwDiag::TxdTextureNames(info.txdPath);
+        for (auto& ip : info.imagePaths) have.push_back(RwDiag::Lower(fs::path(ip).stem().string()));
+        Log::Info("DFF references %zu texture(s); skin folder provides %zu", need.size(), have.size());
+        int missing = 0;
+        for (auto& n : need)
+            if (std::find(have.begin(), have.end(), n) == have.end()) {
+                ++missing;
+                Log::Error("Texture not in skin folder: %s (el juego la buscara en sus propios TXD; si no existe se vera sin textura)", n.c_str());
+            }
+        if (!info.txdPath.empty() && have.empty()) Log::Info("TXD texture names could not be read (formato nativo no reconocido): %s", info.txdPath.c_str());
+        if (need.empty()) Log::Info("DFF has no textured materials (or unusual layout)");
+        else if (!missing) Log::Info("All DFF textures are present in the skin folder");
+    }
 
     bool hasImages = !info.imagePaths.empty();
     // TXD (compartido si no se mezclan imagenes)

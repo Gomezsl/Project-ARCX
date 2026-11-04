@@ -5,15 +5,29 @@
 
 SkinManager& SkinManager::Get() { static SkinManager i; return i; }
 
-void SkinManager::Init(const std::string& configPath, const std::string& defaultModloader) {
+void SkinManager::Init(const std::string& configPath, const std::string& zyzRoot, const std::string& arcxRoot) {
     m_cfgPath = configPath;
-    m_defaultRoot = defaultModloader;
+    m_zyzRoot = zyzRoot;
+    m_arcxRoot = arcxRoot;
     m_cfg.Load(configPath);
     Rescan();
 }
 
 std::string SkinManager::ModloaderDir() const {
-    return m_cfg.modloaderPath.empty() ? m_defaultRoot : m_cfg.modloaderPath;
+    if (m_cfg.loadMethod == "builtin") return m_cfg.arcxLoaderPath.empty() ? m_arcxRoot : m_cfg.arcxLoaderPath;
+    return m_cfg.modloaderPath.empty() ? m_zyzRoot : m_cfg.modloaderPath;
+}
+
+void SkinManager::SetBuiltin(bool builtin) {
+    {
+        std::lock_guard<std::mutex> lk(m_mx);
+        m_cfg.loadMethod = builtin ? "builtin" : "special";
+        m_active = -1;
+        m_selected = -1;
+    }
+    Log::Info("Load method: %s", builtin ? "ARCX loader (builtin)" : "ZyZ ModLoader (special)");
+    SaveConfig();
+    Rescan();
 }
 
 void SkinManager::SaveConfig() {

@@ -79,7 +79,11 @@ extern "C" __attribute__((visibility("default"))) void OnModLoad() {
     Log::Info("Plugin initialized");
     if (dataDir.empty()) Log::Error("Game data dir not found; configure modloader_path in arcx_config.ini");
 
-    SkinManager::Get().Init(arcxDir + "arcx_config.ini", dataDir + "modloader/");
+    // ZyZ ModLoader: .../files/modloader   |   Cargador propio de ARCX: .../files/ARCXLoader
+    const std::string zyzRoot = dataDir + "files/modloader/";
+    const std::string arcxRoot = dataDir + "files/ARCXLoader/";
+    if (!dataDir.empty()) fs::create_directories(arcxRoot, ec);   // para que el usuario vea donde dejar las skins
+    SkinManager::Get().Init(arcxDir + "arcx_config.ini", zyzRoot, arcxRoot);
 
     ModuleInfo mod = FindModule("libGTASA.so");
     void* handle = Aml::GetLibHandle("libGTASA.so");
